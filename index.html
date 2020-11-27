@@ -1,0 +1,354 @@
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <title>Virtual Meet</title>
+
+        <script>
+            if(!location.hash.replace('#', '').length) {
+                location.href = location.href.split('#')[0] + '#' + (Math.random() * 100).toString().replace('.', '');
+                location.reload();
+            }
+        </script>
+
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+        
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+
+
+        <link rel="stylesheet" href="https://www.webrtc-experiment.com/style.css">
+
+        <style>
+            article {
+                background: #393838;
+                border: 0;
+            }
+            html {
+    background: #393838;
+                align-items: center;
+}
+
+body {
+    font-family: "Segoe UI", "Open Sans", "Ubuntu", "Calibri", "Corbel", Tahoma, Sans-Serif;
+    font-size: 1.2em;
+    line-height: 1.5em;
+    margin: 0;
+    
+}
+            #myDiv {
+                background: #fff;
+                align-content: center;
+            }
+            audio, video {
+                -moz-transition: all 1s ease;
+                -ms-transition: all 1s ease;
+
+                -o-transition: all 1s ease;
+                -webkit-transition: all 1s ease;
+                transition: all 1s ease;
+                vertical-align: top;
+                
+            }
+
+            input {
+                border: 0px solid #d9d9d9;
+                border-radius: 0px;
+                font-size: 2em;
+                margin: .em;
+                width: 100%;
+                text-align: center
+            }
+
+            .setup {
+                border-bottom-left-radius: 0;
+                border-top-left-radius: 0;
+                font-size: 102%;
+                height: 47px;
+                margin-left: -9px;
+                margin-top: 8px;
+                position: absolute;
+            }
+
+            p { padding: 1em; }
+
+            li {
+                border-bottom: 1px solid rgb(189, 189, 189);
+                border-left: 1px solid rgb(189, 189, 189);
+                padding: .5em;
+            }
+            button[disabled], input[type=button][disabled] {
+            display: none;
+            }
+            button {
+                background-color: darkgreen;
+            }
+            .media-controls, .volume-control {
+    margin-top: 2px;
+    position: absolute;
+    margin-left: 5px;
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+}
+        </style>
+        <script>
+            document.createElement('article');
+            document.createElement('footer');
+        </script>
+
+        <!-- script used to stylize video element -->
+        <script src="https://www.webrtc-experiment.com/getMediaElement.min.js"> </script>
+
+        <script src="https://www.webrtc-experiment.com/socket.io.js"> </script>
+        <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+        <script src="https://www.webrtc-experiment.com/IceServersHandler.js"></script>
+        <script src="https://www.webrtc-experiment.com/CodecsHandler.js"></script>
+        <script src="https://www.webrtc-experiment.com/RTCPeerConnection-v1.5.js"> </script>
+        <script src="https://www.webrtc-experiment.com/video-conferencing/conference.js"> </script>
+    </head>
+
+    <body>
+        <article>
+            
+
+
+            <!-- just copy this <section> and next script -->
+            <div id="myDiv">
+                <section>
+
+                    <center><input type="text" id="conference-name" placeholder="Today's Agenda" style="width: 50%;" required></center>
+                    
+                    
+                </section>
+
+                <!-- list of all available conferencing rooms -->
+                <table style="width: 100%;" id="rooms-list"></table>
+                
+
+            </div>
+            <center><div id="videos-container"></div></center>
+               <br>
+                <center>
+                <button onclick="myFunction1()" id="setup-new-room" class="setup" style="margin-top: 0px; height: 50px; background-color: green">Join Meet</button>
+                <a href="index.html"><button onclick="myFunction2()" id="end" style="background: red; border-radius: 100px; text-emphasis-color: black"><strong>X</strong></button></a></center>
+          
+
+            <script>
+                
+
+                var config = {
+                    
+                    openSocket: function(config) {
+                        var SIGNALING_SERVER = 'https://socketio-over-nodejs2.herokuapp.com:443/';
+
+                        config.channel = config.channel || location.href.replace(/\/|:|#|%|\.|\[|\]/g, '');
+                        var sender = Math.round(Math.random() * 999999999) + 999999999;
+
+                        io.connect(SIGNALING_SERVER).emit('new-channel', {
+                            channel: config.channel,
+                            sender: sender
+                        });
+
+                        var socket = io.connect(SIGNALING_SERVER + config.channel);
+                        socket.channel = config.channel;
+                        socket.on('connect', function () {
+                            if (config.callback) config.callback(socket);
+                        });
+
+                        socket.send = function (message) {
+                            socket.emit('message', {
+                                sender: sender,
+                                data: message
+                            });
+                        };
+
+                        socket.on('message', config.onmessage);
+                    },
+                    onRemoteStream: function(media) {
+                        var mediaElement = getMediaElement(media.video, {
+                            width: (videosContainer.clientWidth / 2) - 50,
+                            buttons: ['mute-audio', 'mute-video', 'full-screen', 'volume-slider']
+                        });
+                        mediaElement.id = media.stream.streamid;
+                        videosContainer.appendChild(mediaElement);
+                    },
+                    onRemoteStreamEnded: function(stream, video) {
+                        if (video.parentNode && video.parentNode.parentNode && video.parentNode.parentNode.parentNode) {
+                            video.parentNode.parentNode.parentNode.removeChild(video.parentNode.parentNode);
+                        }
+                    },
+                    onRoomFound: function(room) {
+                        var alreadyExist = document.querySelector('button[data-broadcaster="' + room.broadcaster + '"]');
+                        if (alreadyExist) return;
+
+                        if (typeof roomsList === 'undefined') roomsList = document.body;
+
+                        var tr = document.createElement('tr');
+                        tr.innerHTML = '<td>Hey! Join us to talk about <strong>' + room.roomName + '</strong>! </td>' +
+                            '<td><button class="join">Join</button></td>';
+                        roomsList.appendChild(tr);
+
+                        var joinRoomButton = tr.querySelector('.join');
+                        joinRoomButton.setAttribute('data-broadcaster', room.broadcaster);
+                        joinRoomButton.setAttribute('data-roomToken', room.roomToken);
+                        joinRoomButton.onclick = function() {
+                            this.disabled = true;
+                        document.getElementById("setup-new-room").disabled="false";
+
+                            var broadcaster = this.getAttribute('data-broadcaster');
+                            var roomToken = this.getAttribute('data-roomToken');
+                            captureUserMedia(function() {
+                                conferenceUI.joinRoom({
+                                    roomToken: roomToken,
+                                    joinUser: broadcaster
+                                });
+                            }, function() {
+                                joinRoomButton.disabled = false;
+                            });
+                        };
+                    },
+                    onRoomClosed: function(room) {
+                        var joinButton = document.querySelector('button[data-roomToken="' + room.roomToken + '"]');
+                        if (joinButton) {
+                            
+                            joinButton.parentNode.parentNode.parentNode.parentNode.removeChild(joinButton.parentNode.parentNode.parentNode);
+                        }
+                    },
+                    onReady: function() {
+                        console.log('now you can open or join rooms');
+                    }
+                };
+
+                function setupNewRoomButtonClickHandler() {
+                    btnSetupNewRoom.disabled = true;
+                    document.getElementById('conference-name').disabled = true;
+                    captureUserMedia(function() {
+                        conferenceUI.createRoom({
+                            roomName: (document.getElementById('conference-name') || { }).value || 'Anonymous'
+                        });
+                    }, function() {
+                        btnSetupNewRoom.disabled = document.getElementById('conference-name').disabled = false;
+                    });
+                }
+
+                function captureUserMedia(callback, failure_callback) {
+                    var video = document.createElement('video');
+                    video.muted = true;
+                    video.volume = 0;
+
+                    try {
+                        video.setAttributeNode(document.createAttribute('autoplay'));
+                        video.setAttributeNode(document.createAttribute('playsinline'));
+                        video.setAttributeNode(document.createAttribute('controls'));
+                    } catch (e) {
+                        video.setAttribute('autoplay', true);
+                        video.setAttribute('playsinline', true);
+                        video.setAttribute('controls', true);
+                    }
+
+                    getUserMedia({
+                        video: video,
+                        onsuccess: function(stream) {
+                            config.attachStream = stream;
+
+                            var mediaElement = getMediaElement(video, {
+                                width: (videosContainer.clientWidth / 2) - 50,
+                                buttons: ['mute-audio', 'mute-video', 'full-screen', 'volume-slider']
+                            });
+                            mediaElement.toggle('mute-audio');
+                            videosContainer.appendChild(mediaElement);
+
+                            callback && callback();
+                        },
+                        onerror: function() {
+                            alert('unable to get access to your webcam');
+                            callback && callback();
+                        }
+                    });
+                }
+
+                var conferenceUI = conference(config);
+
+                /* UI specific */
+                var videosContainer = document.getElementById('videos-container') || document.body;
+                var btnSetupNewRoom = document.getElementById('setup-new-room');
+                var roomsList = document.getElementById('rooms-list');
+
+                if (btnSetupNewRoom) btnSetupNewRoom.onclick = setupNewRoomButtonClickHandler;
+
+                function rotateVideo(video) {
+                    video.style[navigator.mozGetUserMedia ? 'transform' : '-webkit-transform'] = 'rotate(0deg)';
+                    setTimeout(function() {
+                        video.style[navigator.mozGetUserMedia ? 'transform' : '-webkit-transform'] = 'rotate(360deg)';
+                    }, 1000);
+                }
+
+                (function() {
+                    var uniqueToken = document.getElementById('unique-token');
+                    if (uniqueToken)
+                        if (location.hash.length > 2) uniqueToken.parentNode.parentNode.parentNode.innerHTML = '<h2 style="text-align:center;display: block;"><a href="' + location.href + '" target="_blank">Right click to copy & share this private link</a></h2>';
+                        else uniqueToken.innerHTML = uniqueToken.parentNode.parentNode.href = '#' + (Math.random() * new Date().getTime()).toString(36).toUpperCase().replace( /\./g , '-');
+                })();
+
+                function scaleVideos() {
+                    var videos = document.querySelectorAll('video'),
+                        length = videos.length, video;
+
+                    var minus = 130;
+                    var windowHeight = 1600;
+                    var windowWidth = 900;
+                    var windowAspectRatio = windowWidth / windowHeight;
+                    var videoAspectRatio = 16 / 9;
+                    var blockAspectRatio;
+                    var tempVideoWidth = 0;
+                    var maxVideoWidth = 0;
+
+                    for (var i = length; i > 0; i--) {
+                        blockAspectRatio = i * videoAspectRatio / Math.ceil(length / i);
+                        if (blockAspectRatio <= windowAspectRatio) {
+                            tempVideoWidth = videoAspectRatio * windowHeight / Math.ceil(length / i);
+                        } else {
+                            tempVideoWidth = windowWidth / i;
+                        }
+                        if (tempVideoWidth > maxVideoWidth)
+                            maxVideoWidth = tempVideoWidth;
+                    }
+                    for (var i = 0; i < length; i++) {
+                        video = videos[i];
+                        if (video)
+                            video.width = maxVideoWidth - minus;
+                    }
+                }
+
+                window.onresize = scaleVideos;
+
+            </script>
+
+            
+        </article>
+        <script>
+            function myFunction1() {
+                var y=document.getElementById("end");
+                y.style.visibility="visible";
+    
+    
+  
+}
+function myFunction2() {
+  var x=document.getElementById("videos-container");
+    x.style.display="none";
+    document.getElementById("setup-new-room").disabled=false;
+    
+  
+}
+</script>
+
+
+        
+
+        <!-- commits.js is useless for you! -->
+        <script src="https://www.webrtc-experiment.com/commits.js" async> </script>
+    </body>
+</html>
